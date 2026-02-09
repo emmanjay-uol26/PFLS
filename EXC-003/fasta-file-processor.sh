@@ -1,5 +1,6 @@
 #for $1= .fasta (fna) file
-
+echo $"FASTA File Statistics":
+echo $"----------------------"
     num_seq=$(grep ">" $1 | wc -l)
 echo $"Number of sequences":$num_seq
 
