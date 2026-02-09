@@ -16,4 +16,4 @@ echo "Length of the shortest sequence: $length_of_the_shortest_sequence"
     avg=$(awk '/^>/ {count++} !/^>/ {sum += length($0)} END {print sum/count}' $1)
 echo "Average sequence length: $avg"
 
-    gc_perc=$(grep -v "^>" $1) | awk '{total += length($0); gc += gsub(/[GCgc]/, "", $0)} END {if (total > 0) printf "GC Content (%): %.2f%%\n", (gc / total) * 100}' $1
+    gc_perc=$(grep -v "^>" $1) | awk '{total += length($0); gc += gsub(/[GCgc]/, "", $0)} END {if (total > 0) print "GC Content (%): "(gc / total) * 100}' $1
