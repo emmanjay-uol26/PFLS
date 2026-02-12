@@ -1,19 +1,32 @@
-#for $1= .fasta (fna) file
-echo "FASTA File Statistics":
+#!/bin/bash
+# USAGE: ./script.sh your_file.fasta
+
+# Ensure a file was provided
+[[ -z "$1" ]] && { echo "Usage: $0 <fasta_file>"; exit 1; }
+
+echo "FASTA File Statistics for: $1"
 echo "----------------------"
-    num_seq=$(grep ">" $1 | wc -l)
+
+# 1. Number of sequences
+num_seq=$(grep -c ">" "$1")
 echo "Number of sequences: $num_seq"
 
-    total_len=$(awk '/^>/ {next} {sum+= length} END {print sum}' $1)
+# 2. Total length
+total_len=$(awk '/^>/ {next} {sum+= length($0)} END {print sum}' "$1")
 echo "Total length of sequences: $total_len"
 
-    length_of_the_longest_sequence=$(awk '/^>/ {if (seqlen > max) {max = seqlen; name = prev}; seqlen = 0; prev = $0; next} {seqlen += length($0)} END {if (seqlen > max) {max = seqlen; name = prev}; print max}' $1)
-echo "Length of the longest sequence: $length_of_the_longest_sequence"
+# 3. Longest sequence
+max_len=$(awk '/^>/ {if (seqlen > max) max = seqlen; seqlen = 0; next} {seqlen += length($0)} END {if (seqlen > max) max = seqlen; print max}' "$1")
+echo "Length of the longest sequence: $max_len"
 
-    length_of_the_shortest_sequence=$(awk '/^>/ {if (seqlen > 0 && (min == 0 || seqlen < min)) min = seqlen; seqlen = 0; next} {seqlen += length($0)} END {if (seqlen > 0 && (seqlen < min || min == 0)) min = seqlen; print min}' $1)
-echo "Length of the shortest sequence: $length_of_the_shortest_sequence"
+# 4. Shortest sequence (Fixing logic to handle first sequence)
+min_len=$(awk '/^>/ {if (seqlen > 0 && (min == 0 || seqlen < min)) min = seqlen; seqlen = 0; next} {seqlen += length($0)} END {if (seqlen > 0 && (seqlen < min || min == 0)) min = seqlen; print min}' "$1")
+echo "Length of the shortest sequence: $min_len"
 
-    avg=$(awk '/^>/ {count++} !/^>/ {sum += length($0)} END {print sum/count}' $1)
+# 5. Average sequence length
+avg=$(awk -v n="$num_seq" '/^>/ {next} {sum += length($0)} END {if (n>0) print sum/n; else print 0}' "$1")
 echo "Average sequence length: $avg"
 
-    gc_perc=$(grep -v "^>" $1) | awk '{total += length($0); gc += gsub(/[GCgc]/, "", $0)} END {if (total > 0) print "GC Content (%): "(gc / total) * 100}' $1
+# 6. GC Content (Fixed the pipe/parentheses error)
+echo -n "GC Content (%): "
+grep -v "^>" "$1" | awk '{total += length($0); gc += gsub(/[GCgc]/, "", $0)} END {if (total > 0) printf "%.2f%%\n", (gc / total) * 100}'
