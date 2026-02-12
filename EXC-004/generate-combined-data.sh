@@ -1,33 +1,44 @@
 #!/bin/bash
+shopt -s nullglob
 
 # Define paths
-BASE_DIR="EXC-004"
-RAW_DATA="$BASE_DIR/RAW-DATA"
-COMBINED_DATA="$BASE_DIR/COMBINED-DATA"
+RAW_DATA="RAW-DATA"
+COMBINED_DATA="COMBINED-DATA"
 
+# 1. Check if RAW-DATA exists
+if [ ! -d "$RAW_DATA" ]; then
+    echo "ERROR: Directory '$RAW_DATA' not found."
+    exit 1
+fi
+
+# 2. FIND MASTER TRANSLATION FILE (Look inside RAW-DATA)
+# This finds the file once so we can use it for all samples
+TRANS_FILE=$(find "$RAW_DATA" -maxdepth 1 -iname "sample-translation.txt" | head -n 1)
+
+if [ -z "$TRANS_FILE" ]; then
+    echo "ERROR: Could not find master sample-translation.txt in $RAW_DATA"
+    exit 1
+fi
+
+echo "Using translation file: $TRANS_FILE"
 mkdir -p "$COMBINED_DATA"
 
-echo "Checking RAW-DATA path: $RAW_DATA"
-
-# Loop through each DNA sample directory
+# 3. Loop through sample directories
 for DNA_PATH in "$RAW_DATA"/*/; do
-    
-    # Skip if no folders are found
-    [ -e "$DNA_PATH" ] || { echo "No folders found in $RAW_DATA"; break; }
-
     SAMPLE_ID=$(basename "$DNA_PATH")
+    
+    # Skip the sample loop if it hits the RAW-DATA/EXC-004 folder (if it's just a subfolder)
+    [[ "$SAMPLE_ID" == "EXC-004" ]] && continue
+
     echo "--- Processing Sample: $SAMPLE_ID ---"
 
-    # Find the translation file (looking for any case)
-    TRANS_FILE=$(find "$DNA_PATH" -maxdepth 1 -iname "sample-translation.txt" | head -n 1)
+    # Extract culture name from the master file
+    CULTURE_NAME=$(awk -v id="$SAMPLE_ID" '$1 == id {print $2}' "$TRANS_FILE")
     
-    if [ -z "$TRANS_FILE" ]; then
-        echo "  (!) Error: sample-translation.txt not found in $DNA_PATH"
+    if [ -z "$CULTURE_NAME" ]; then
+        echo "  (!) Warning: $SAMPLE_ID not found in $TRANS_FILE. Skipping."
         continue
     fi
-
-    # Extract culture name
-    CULTURE_NAME=$(awk -v id="$SAMPLE_ID" '$1 == id {print $2}' "$TRANS_FILE")
     echo "  Found Culture Name: $CULTURE_NAME"
 
     # Define bins directory
@@ -47,15 +58,13 @@ for DNA_PATH in "$RAW_DATA"/*/; do
     # Process other Bins
     COUNTER=1
     for BIN_FILE in "$BINS_DIR"/*.fasta; do
-        [ -e "$BIN_FILE" ] || continue
         [[ "$BIN_FILE" == *"bin-unbinned.fasta" ]] && continue
         
         BIN_ID=$(basename "$BIN_FILE" .fasta)
-        
-        # Checkm stats
         CHECKM_FILE="${DNA_PATH}checkm.txt"
-        STATS=$(awk -v bin="$BIN_ID" '$1 == bin {printf "%d %d", $12, $13}' "$CHECKM_FILE" 2>/dev/null)
         
+        # Checkm extraction
+        STATS=$(awk -v bin="$BIN_ID" '$1 == bin {printf "%d %d", $12, $13}' "$CHECKM_FILE" 2>/dev/null)
         COMPLETION=$(echo ${STATS:-0 0} | cut -d' ' -f1)
         CONTAMINATION=$(echo ${STATS:-0 0} | cut -d' ' -f2)
 
@@ -65,15 +74,11 @@ for DNA_PATH in "$RAW_DATA"/*/; do
             TYPE="BIN"
         fi
 
-        SEQ_NUM=$(printf "%03d" $COUNTER)
-        NEW_NAME="${CULTURE_NAME}_${TYPE}_${SEQ_NUM}.fa"
-        
+        NEW_NAME="${CULTURE_NAME}_${TYPE}_$(printf "%03d" $COUNTER).fa"
         cp "$BIN_FILE" "$COMBINED_DATA/$NEW_NAME"
         echo "  Copied: $NEW_NAME"
-        
         ((COUNTER++))
     done
 done
 
-echo "Script Complete. Check $COMBINED_DATA now."
-
+echo "Done! Check $COMBINED_DATA for your renamed files."
